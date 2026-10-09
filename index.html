@@ -603,7 +603,10 @@ details p{padding:0 48px 22px 0;color:var(--graphite);max-width:40em}
       <p class="direct">Or write directly: <a href="mailto:ilya@filefresh.net">ilya@filefresh.net</a></p>
     </div>
 
-    <form class="form" id="wf" action="mailto:ilya@filefresh.net" method="post" enctype="text/plain" aria-labelledby="formTitle" novalidate>
+    <form class="form" id="wf" action="https://formsubmit.co/ilya@filefresh.net" method="post" aria-labelledby="formTitle" novalidate>
+      <input type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">
+      <input type="hidden" name="_subject" value="FileFresh — new workflow conversation">
+      <input type="hidden" name="_template" value="table">
       <div class="form-head"><h3 id="formTitle">Tell us about your workflow</h3><span>about 2 minutes</span></div>
       <div class="row2">
         <label class="f"><span class="ft">Name</span><input class="inp" name="name" autocomplete="name" required></label>
@@ -628,8 +631,8 @@ details p{padding:0 48px 22px 0;color:var(--graphite);max-width:40em}
         <textarea class="inp" name="how" rows="4"></textarea>
       </label>
       <div class="form-foot">
-        <p>Opens an email to ilya@filefresh.net with your answers. Nothing is stored on this site.</p>
-        <button type="submit" class="btn btn-primary">Open email</button>
+        <p>Sent through FormSubmit to ilya@filefresh.net. You can also email us directly.</p>
+        <button type="submit" class="btn btn-primary" id="sendBtn">Send</button>
       </div>
       <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
     </form>
@@ -689,8 +692,8 @@ details p{padding:0 48px 22px 0;color:var(--graphite);max-width:40em}
     if (b.dataset.focus) wf.dataset.focus = b.dataset.focus; else delete wf.dataset.focus;
   });
 
-  const f = document.getElementById('wf'), msg = document.getElementById('formMsg');
-  f.addEventListener('submit', e => {
+  const f = document.getElementById('wf'), msg = document.getElementById('formMsg'), sendBtn = document.getElementById('sendBtn');
+  f.addEventListener('submit', async e => {
     e.preventDefault();
     const d = new FormData(f), name = (d.get('name') || '').trim(), email = (d.get('email') || '').trim();
     msg.classList.remove('err');
@@ -698,12 +701,45 @@ details p{padding:0 48px 22px 0;color:var(--graphite);max-width:40em}
       msg.textContent = 'Please add your name and a valid work email.'; msg.classList.add('err');
       (!name ? f.elements.name : f.elements.email).focus(); return;
     }
+
     const v = k => (d.get(k) || '').trim() || '—';
-    const body = ['Name: ' + name, 'Work email: ' + email, 'Company: ' + v('company'), 'Role: ' + v('role'),
-      'Supplier data: ' + (d.getAll('data').join(', ') || '—'), '', 'How we currently find where problems start:', v('how')].join('\n');
-    const subj = 'FileFresh — workflow conversation (' + ((d.get('company') || '').trim() || name) + ')';
-    location.href = 'mailto:ilya@filefresh.net?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
-    msg.textContent = 'Your email app should open with your answers. If it doesn’t, write to ilya@filefresh.net.';
+    const company = (d.get('company') || '').trim();
+    const payload = {
+      name,
+      email,
+      company: v('company'),
+      role: v('role'),
+      'supplier data': d.getAll('data').join(', ') || '—',
+      'how problems are investigated': v('how'),
+      _subject: 'FileFresh — workflow conversation (' + (company || name) + ')',
+      _template: 'table',
+      _honey: (d.get('_honey') || '').trim(),
+      _url: location.href
+    };
+
+    const original = sendBtn.textContent;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+    msg.textContent = 'Sending your answers…';
+
+    try {
+      const res = await fetch('https://formsubmit.co/ajax/ilya@filefresh.net', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Submission failed');
+      const out = await res.json();
+      if (out.success === false || out.success === 'false') throw new Error(out.message || 'Submission failed');
+      f.reset();
+      msg.textContent = 'Thanks — we received your workflow details. We’ll get back to you.';
+    } catch (err) {
+      msg.textContent = 'We couldn’t send the form. Please email ilya@filefresh.net directly.';
+      msg.classList.add('err');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = original;
+    }
   });
 })();
 
