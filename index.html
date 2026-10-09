@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FileFresh — Where did the data change?</title>
+<meta name="description" content="FileFresh is an early-stage product exploring traceability for supplier XML, CSV, API and inventory data — from source to destination.">
+<link rel="canonical" href="https://filefresh.net/">
+<meta name="theme-color" content="#F4F5F4">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://filefresh.net/">
+<meta property="og:title" content="FileFresh — Where did the data change?">
+<meta property="og:description" content="An early-stage product exploring traceability for supplier XML, CSV, API and inventory data — from source to destination.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F4F5F4'/%3E%3Crect x='4' y='12' width='8' height='8' fill='%23111417'/%3E%3Cpath d='M12 16h4' stroke='%23111417' stroke-width='2.5'/%3E%3Cpath d='M16 16h5' stroke='%23111417' stroke-width='2.5' stroke-dasharray='2.5 2'/%3E%3Ccircle cx='24.5' cy='16' r='3.6' fill='none' stroke='%23111417' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700&amp;family=Overpass+Mono:wght@400;600&amp;display=swap">
+<!--
+FileFresh design system — "Line map"
+TYPE      Overpass (Highway Gothic lineage: wayfinding for infrastructure) for all reading text.
+          Overpass Mono only for literal data: formats, field values, system types, drawing metadata.
+          Scale 12.5 / 15 / 17 / 20 / 28 / 30-44 / 42-76 px. Weights 400, 600, 700. No colored headline words.
+SPACING   4-based: 4 8 12 16 24 32 48 72 112. Section padding varies with content; it is not uniform.
+LINES     1px hairline = rules, tables, drawing frames. 2px = routes and station outlines. 3px = traced segment only.
+ROUTES    Horizontal on wide screens, vertical below 640px; no curves, no diagonals, no route colors.
+          Stations sit at the left edge of their column so labels read left-aligned.
+          Source = filled square. Step = ring. Destination = ring with centre dot. Pass-through = no marker.
+          Label (name + type) above the line; readings and notes below. Notes for a segment sit on the line itself.
+COLOR     ink #111417 text and stations · graphite #4E555C secondary text · track #7D848B routes
+          rule #CDD2D5 hairlines · ground #F4F5F4 page · paper #FFFFFF inputs only
+          signal #C2410C = unresolved difference, never decoration · trace #1E7A52 = traced / verified, never decoration.
+          "Completed" is graphite: a step reporting success is not the same as verified data.
+HONESTY   Every drawing carries a title block stating what it is (conceptual / research / direction).
+MOTION    No scroll animation, no ambient motion. Only route highlighting on explicit user choice (150ms opacity).
+MAP RESPONSIVE  1440: full drawing. 820: same drawing, compressed columns, notes may wrap.
+          390: each route becomes a vertical line, routes stack, pass-through cells collapse, notes sit beside the line.
+-->
+<style>
+:root{
+  --ground:#F4F5F4;--paper:#FFFFFF;--ink:#111417;--graphite:#4E555C;--track:#7D848B;--rule:#CDD2D5;--wash:#E7EAEB;
+  --signal:#C2410C;--trace:#1E7A52;
+  --sans:"Overpass","Helvetica Neue",Helvetica,sans-serif;
+  --mono:"Overpass Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:72px;--s9:112px;
+  --gut:48px;--pt:12px;--line:2px;
+}
+*,*::before,*::after{box-sizing:border-box}
+*{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:80px}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+body{font-family:var(--sans);font-size:17px;line-height:1.55;color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.2em;text-decoration-color:var(--track)}
+a:hover{text-decoration-color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+h1,h2,h3{font-weight:700;line-height:1.08;letter-spacing:-.012em;text-wrap:balance}
+h2{font-size:clamp(30px,3.4vw,44px)}
+p{text-wrap:pretty}
+strong{font-weight:600}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.skip{position:absolute;left:var(--s4);top:-60px;background:var(--ink);color:#fff;padding:10px 14px;z-index:100;text-decoration:none}
+.skip:focus{top:var(--s3)}
+.wrap{max-width:1344px;margin:0 auto;padding:0 var(--gut)}
+.intro{color:var(--graphite);font-size:18px;max-width:34em}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;font:600 16px/1 var(--sans);border:1px solid var(--ink);border-radius:2px;text-decoration:none;cursor:pointer;transition:background-color .15s,color .15s;white-space:nowrap}
+.btn-primary{background:var(--ink);color:#fff}
+.btn-primary:hover{background:#2A2F35}
+.btn-line{background:transparent;color:var(--ink)}
+.btn-line:hover{background:var(--wash)}
+.btn-sm{min-height:40px;padding:0 16px;font-size:15px}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:50;background:var(--ground);border-bottom:1px solid var(--rule)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:18px;text-decoration:none;letter-spacing:-.01em}
+.mark{display:inline-flex;align-items:center;width:30px}
+.mark i{display:block;flex:none}
+.mark i:nth-child(1){width:8px;height:8px;background:var(--ink)}
+.mark i:nth-child(2){width:12px;border-top:2px dashed var(--ink)}
+.mark i:nth-child(3){width:10px;height:10px;border:2px solid var(--ink);border-radius:50%}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a:not(.btn){font-size:15px;text-decoration:none;color:var(--graphite);padding:8px 0}
+.nav-links a:not(.btn):hover{color:var(--ink);text-decoration:underline}
+.menu-btn{display:none;width:44px;height:44px;border:1px solid var(--rule);background:transparent;cursor:pointer;align-items:center;justify-content:center}
+.bars,.bars::before,.bars::after{display:block;width:18px;height:2px;background:var(--ink)}
+.bars{position:relative}
+.bars::before,.bars::after{content:"";position:absolute;left:0}
+.bars::before{top:-6px}.bars::after{top:6px}
+.nav.open .bars{background:transparent}
+.nav.open .bars::before{top:0;transform:rotate(45deg)}
+.nav.open .bars::after{top:0;transform:rotate(-45deg)}
+
+/* title block (honesty device) */
+.tb{border:1px solid var(--ink);font-size:14.5px;line-height:1.4;background:var(--ground);align-self:start}
+.tb>div{display:grid;grid-template-columns:7.2em 1fr}
+.tb>div+div{border-top:1px solid var(--rule)}
+.tb dt{font:400 12.5px/1.4 var(--mono);color:var(--graphite);padding:9px 12px;border-right:1px solid var(--rule)}
+.tb dd{padding:8px 12px}
+.tb dd.claim{font-weight:600}
+
+/* hero */
+.hero{padding:var(--s8) 0 var(--s7)}
+.hero-top{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:var(--s7);align-items:end;margin-bottom:var(--s8)}
+.hero h1{font-size:clamp(42px,5.6vw,76px);line-height:1;letter-spacing:-.022em;max-width:11em}
+.support{font-size:clamp(19px,1.6vw,22px);font-weight:600;margin:var(--s5) 0 var(--s3)}
+.lede{color:var(--graphite);max-width:36em;font-size:18px}
+.ctas{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s6)}
+.tb--project{max-width:400px;justify-self:end;width:100%}
+
+/* figures */
+.fig{margin:0}
+.ffoot{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,420px);gap:var(--s6);align-items:start;margin-top:var(--s6);padding-top:var(--s5);border-top:1px solid var(--rule)}
+.fig-note{color:var(--graphite);font-size:15.5px;max-width:34em}
+.key{list-style:none;display:flex;flex-wrap:wrap;gap:10px 24px;font-size:14px;color:var(--graphite)}
+.key li{display:inline-flex;align-items:center;gap:8px}
+.sw{display:inline-block;flex:none;vertical-align:middle}
+.sw-src{width:10px;height:10px;background:var(--ink)}
+.sw-stn{width:11px;height:11px;border:2px solid var(--ink);border-radius:50%}
+.sw-dst{width:11px;height:11px;border-radius:50%;border:2px solid var(--ink);background:radial-gradient(circle,var(--ink) 0 1.6px,transparent 2px)}
+.sw-route{width:24px;border-top:2px solid var(--track)}
+.sw-open{width:24px;border-top:2px dashed var(--signal)}
+.sw-trace{width:24px;border-top:3px solid var(--trace)}
+
+/* zones header */
+.zones{display:grid;grid-template-columns:var(--tpl);margin-bottom:var(--s5);font:400 12.5px/1 var(--mono);color:var(--graphite)}
+.zones span{padding:0 0 10px;border-bottom:1px solid var(--rule);position:relative}
+.zones span::before{content:"";position:absolute;left:calc(var(--pt) / 2 - .5px);bottom:-8px;height:8px;border-left:1px solid var(--track)}
+
+/* ===== line map ===== */
+.map{display:grid;grid-template-columns:var(--tpl);row-gap:0;transition:none}
+.n{grid-column:var(--c);grid-row:calc(var(--r) * 3 - 2)/span 3;display:grid;grid-template-columns:var(--pt) minmax(0,1fr);grid-template-rows:subgrid;position:relative;transition:opacity .15s}
+.lb{grid-column:1/-1;grid-row:1;align-self:end;padding:0 var(--s4) 12px 0;display:flex;flex-direction:column;gap:2px}
+.n--next .lb{padding-top:var(--s7)}
+.lb b{font-weight:600;font-size:17px;line-height:1.25}
+.lb small{font:400 12.5px/1.4 var(--mono);color:var(--graphite)}
+.pt{grid-column:1;grid-row:2;align-self:center;width:var(--pt);height:var(--pt);position:relative;z-index:1}
+.n--src .pt{background:var(--ink)}
+.n--stn .pt{border:var(--line) solid var(--ink);border-radius:50%;background:var(--ground)}
+.n--dst .pt{border:var(--line) solid var(--ink);border-radius:50%;background:radial-gradient(circle,var(--ink) 0 2px,var(--ground) 2.5px)}
+.so,.si{position:relative}
+.so{grid-column:2;grid-row:2;align-self:center;height:14px}
+.si{display:none}
+.so::before,.si::before,.n--pass .pt::before{content:"";position:absolute;border:0 solid var(--track)}
+.so::before,.n--pass .pt::before{left:0;right:0;top:50%;border-top-width:var(--line);transform:translateY(-50%)}
+.n--pass .pt{height:14px}
+.n[data-out="none"] .so::before{display:none}
+.n[data-out="open"] .so::before,.n--pass[data-in="open"] .pt::before{border-top-style:dashed;border-color:var(--signal)}
+.n[data-out="trace"] .so::before,.n--pass[data-in="trace"] .pt::before{border-top-width:3px;border-color:var(--trace)}
+.nt{grid-column:1/-1;grid-row:2;align-self:center;position:relative;height:0;z-index:2}
+.nb{position:absolute;top:0;left:calc(var(--pt) / 2 - (var(--k) + 1) * 50%);transform:translate(-50%,-50%);
+  font:600 12.5px/1.3 var(--mono);color:var(--signal);background:var(--ground);border:1px solid var(--signal);padding:3px 8px 2px;white-space:nowrap;display:inline-flex;gap:7px;align-items:baseline}
+.nb i{font-style:normal}
+.nb--q{padding:3px 7px 2px}
+.bl{grid-column:1/-1;grid-row:3;padding:12px var(--s5) 0 0;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.bl p{font-size:15.5px;color:var(--graphite);max-width:22em}
+.bl-t{font-size:14.5px;color:var(--graphite)}
+.rd{font:400 13.5px/1.3 var(--mono);color:var(--ink);border-left:2px solid var(--rule);padding:1px 0 1px 8px}
+.rd--sig{color:var(--signal);border-left-color:var(--signal);font-weight:600}
+.done{font:400 13px/1.3 var(--mono);color:var(--graphite)}
+.map[data-focus="a"] .n:not([data-route="a"]),.map[data-focus="b"] .n:not([data-route="b"]),.map[data-focus="c"] .n:not([data-route="c"]){opacity:.18}
+@media (prefers-reduced-motion:reduce){.n{transition:none}}
+
+/* complement: observation line alongside the route */
+.obs{grid-column:1/-1;grid-row:4;display:grid;grid-template-columns:subgrid;grid-template-rows:40px auto}
+.tp{grid-column:var(--c);grid-row:1;position:relative}
+.tp::before{content:"";position:absolute;left:calc(var(--pt) / 2 - .5px);top:2px;bottom:0;border-left:1px dashed var(--ink)}
+.obs .ln{grid-column:1/-2;grid-row:2;border-top:1px solid var(--ink);margin-left:calc(var(--pt) / 2);margin-right:calc(var(--pt) / -2);align-self:start}
+.obs .ol{grid-column:1/-1;grid-row:2;padding:10px 0 0 calc(var(--pt) / 2);font-size:15px}
+.obs .ol em{font:400 12.5px var(--mono);color:var(--graphite);font-style:normal;margin-left:6px;border:1px solid var(--rule);padding:2px 6px}
+
+/* sections */
+.sec{padding:var(--s9) 0;border-top:1px solid var(--rule)}
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s7);margin-bottom:var(--s8)}
+.split-r p+p{margin-top:var(--s4)}
+.split-r p{color:var(--graphite);font-size:18px;max-width:34em}
+.h-2{font-weight:400}
+.qlist{list-style:none;margin-top:var(--s5);border-top:1px solid var(--ink)}
+.qlist li{display:grid;grid-template-columns:28px 1fr;padding:12px 0;border-bottom:1px solid var(--rule);font-size:17px}
+.qlist li::before{content:"?";font:600 13px/1.6 var(--mono);color:var(--signal)}
+.legend-line{display:flex;flex-wrap:wrap;gap:var(--s3) var(--s6);margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule);font-size:15px;color:var(--graphite)}
+.legend-line p{display:inline-flex;align-items:center;gap:10px}
+.legend-line strong{color:var(--ink)}
+.statement{margin-top:var(--s8);font-size:clamp(22px,2.3vw,30px);line-height:1.3;letter-spacing:-.01em;max-width:28em;padding-left:var(--s5);border-left:3px solid var(--ink);color:var(--graphite)}
+.statement strong{color:var(--ink);font-weight:600}
+.statement--s{font-size:clamp(20px,1.9vw,25px);margin-top:var(--s7)}
+
+.wf-head{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:var(--s7);align-items:end;margin-bottom:var(--s7)}
+.route-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;margin-bottom:var(--s6);border-bottom:1px solid var(--rule)}
+.ctl-l{font:400 12.5px var(--mono);color:var(--graphite);margin-right:12px}
+.route-ctl button{font:600 15px/1 var(--sans);color:var(--graphite);background:none;border:0;border-bottom:2px solid transparent;min-height:44px;padding:0 12px;cursor:pointer;margin-bottom:-1px}
+.route-ctl button:hover{color:var(--ink)}
+.route-ctl button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.notes3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s6);margin-top:var(--s8)}
+.notes3 p{font-size:16px;color:var(--graphite);border-top:1px solid var(--ink);padding-top:var(--s4)}
+.notes3 strong{display:block;color:var(--ink);margin-bottom:4px;font-size:17px}
+
+.sec--res{background:var(--paper)}
+.sec--res .tb{background:var(--paper)}
+.res-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,420px);gap:var(--s7);align-items:end;margin-bottom:var(--s7)}
+.res-head .intro{margin-top:var(--s4)}
+.tbl{width:100%;border-collapse:collapse;text-align:left}
+.tbl thead th{font:400 12.5px/1.3 var(--mono);color:var(--graphite);padding:0 var(--s5) 10px 0;border-bottom:1px solid var(--ink);vertical-align:bottom}
+.tbl tbody th{font-weight:600;font-size:17px;padding:18px var(--s5) 18px 0;vertical-align:top;white-space:nowrap}
+.tbl td{padding:18px var(--s5) 18px 0;border-bottom:1px solid var(--rule);vertical-align:top;font-size:16.5px}
+.tbl tbody th{border-bottom:1px solid var(--rule)}
+.tbl td:last-child,.tbl th:last-child{padding-right:0}
+.tbl--res td:nth-child(3){color:var(--graphite);max-width:30em}
+.dv{display:inline-flex;align-items:center;gap:10px;font:400 13.5px/1.4 var(--mono);white-space:nowrap}
+.dv .dl{width:32px;border-top:2px dashed var(--signal)}
+.dv .sig{color:var(--signal);font-weight:600}
+.dv--plain{color:var(--graphite);white-space:normal}
+
+.ap-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--s7);margin-bottom:var(--s8)}
+.ap-copy p{color:var(--graphite);font-size:18px;margin-top:var(--s4);max-width:30em}
+.ap-copy h2{margin-bottom:var(--s5)}
+.questions{border-top:1px solid var(--ink)}
+.questions>div{display:grid;grid-template-columns:minmax(150px,.42fr) 1fr;gap:var(--s5);padding:var(--s5) 0;border-bottom:1px solid var(--rule)}
+.questions dt{font-size:clamp(22px,2.1vw,28px);font-weight:700;line-height:1.15}
+.questions dd{display:flex;justify-content:space-between;gap:var(--s5);align-items:baseline}
+.questions dd p{font-size:16.5px;color:var(--graphite);max-width:26em}
+.ref{font:400 12.5px var(--mono);color:var(--graphite);white-space:nowrap}
+
+.formats{margin-top:var(--s7);font:400 14px/1.6 var(--mono);color:var(--ink)}
+.formats p{font:400 15px var(--sans);color:var(--graphite);margin-bottom:6px}
+.formats ul{list-style:none;display:flex;flex-wrap:wrap;gap:4px 0}
+.formats li+li::before{content:"·";padding:0 10px;color:var(--track)}
+
+.who-grid{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:var(--s7)}
+.who-grid .intro{margin-top:var(--s4)}
+.tbl--who td.m{font:400 13px/1.6 var(--mono);color:var(--graphite);white-space:nowrap}
+
+.sec--contact{background:var(--paper)}
+.contact-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s8);align-items:start}
+.contact-copy p{color:var(--graphite);font-size:18px;margin-top:var(--s4);max-width:30em}
+.contact-copy h2{margin-bottom:var(--s5)}
+.contact-copy .no-deck{margin-top:var(--s6);padding-left:var(--s4);border-left:2px solid var(--ink);font-size:16.5px}
+.contact-copy .no-deck strong{color:var(--ink)}
+.direct{font-size:16.5px!important}
+.direct a{color:var(--ink);font-weight:600}
+.form{border:1px solid var(--ink);padding:var(--s6);display:grid;gap:var(--s5);background:var(--paper)}
+.form-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s4);padding-bottom:var(--s4);border-bottom:1px solid var(--rule)}
+.form-head h3{font-size:20px;letter-spacing:-.005em}
+.form-head span{font:400 12.5px var(--mono);color:var(--graphite);white-space:nowrap}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+label.f{display:block;font-size:15px;font-weight:600}
+label.f .inp{display:block;margin-top:6px}
+.opt{font-weight:400;color:var(--graphite);font-size:13.5px}
+.inp{width:100%;font:400 16px/1.4 var(--sans);color:var(--ink);background:var(--ground);border:1px solid var(--track);border-radius:2px;padding:11px 12px;min-height:46px}
+.inp:focus{outline:2px solid var(--ink);outline-offset:0;border-color:var(--ink);background:var(--paper)}
+textarea.inp{resize:vertical;min-height:110px}
+fieldset{border:0;min-width:0}
+legend{font-size:15px;font-weight:600;margin-bottom:10px}
+.opts{display:flex;flex-wrap:wrap;gap:6px 22px}
+.opts label{display:inline-flex;align-items:center;gap:8px;font-size:16px;min-height:36px;cursor:pointer}
+.opts input{width:18px;height:18px;accent-color:var(--ink);margin:0;position:relative;top:-2px}
+.form-foot{display:flex;justify-content:space-between;align-items:center;gap:var(--s4);flex-wrap:wrap;padding-top:var(--s4);border-top:1px solid var(--rule)}
+.form-foot p{font-size:14px;color:var(--graphite);max-width:28em}
+.form-msg{font-size:15px;color:var(--ink)}
+.form-msg:empty{display:none}
+.form-msg.err{color:var(--signal);font-weight:600}
+
+.sec--faq{padding:var(--s8) 0 var(--s9)}
+.faq-grid{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:var(--s7)}
+.faq-side p{color:var(--graphite);margin-top:var(--s4);max-width:22em}
+.acc{border-top:1px solid var(--ink)}
+details{border-bottom:1px solid var(--rule)}
+summary{list-style:none;display:grid;grid-template-columns:1fr 24px;gap:var(--s5);align-items:baseline;padding:20px 0;cursor:pointer;font-size:19px;font-weight:600;line-height:1.3}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font:400 20px/1 var(--mono);color:var(--graphite);text-align:right}
+details[open] summary::after{content:"−"}
+summary:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.2em}
+details p{padding:0 48px 22px 0;color:var(--graphite);max-width:40em}
+
+.final{border-top:1px solid var(--ink);padding:var(--s8) 0}
+.final-in{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);gap:0 var(--s7);align-items:end}
+.final .pre{grid-column:1/-1;color:var(--graphite);font-size:18px;margin-bottom:var(--s3)}
+.final h2{font-size:clamp(28px,3vw,40px);font-weight:600;max-width:20em}
+.final-act{display:grid;gap:var(--s3);justify-items:start}
+.final-act p{color:var(--graphite);font-size:15px}
+
+.foot{border-top:1px solid var(--rule);padding:var(--s6) 0;font-size:14.5px;color:var(--graphite)}
+.foot-in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3) var(--s6)}
+.foot .logo{font-size:16px;color:var(--ink)}
+.foot-links{display:flex;gap:var(--s5)}
+
+/* ===== tablet ===== */
+@media (max-width:1100px){
+  :root{--gut:32px}
+  .nav-links{gap:20px}
+  .lb b{font-size:15.5px}
+  .nb{font-size:11.5px;padding:2px 6px 1px;gap:5px}
+}
+@media (max-width:900px){
+  .hero-top,.split,.wf-head,.ap-grid,.who-grid,.contact-grid,.faq-grid,.res-head,.final-in{grid-template-columns:1fr;gap:var(--s6)}
+  .tb--project{justify-self:start;max-width:520px}
+  .hero-top{margin-bottom:var(--s7)}
+  .split,.ap-grid{margin-bottom:var(--s7)}
+  .ffoot{grid-template-columns:1fr}
+  .ffoot .tb{max-width:520px}
+  .notes3{grid-template-columns:1fr;gap:var(--s5)}
+  .sec{padding:var(--s8) 0}
+  .final-act{margin-top:var(--s5)}
+  .res-head .tb{max-width:520px}
+  .faq-side p{max-width:none}
+}
+@media (max-width:820px){
+  .menu-btn{display:inline-flex}
+  .nav-links{display:none;position:absolute;left:0;right:0;top:64px;background:var(--ground);border-bottom:1px solid var(--ink);flex-direction:column;align-items:stretch;gap:0;padding:var(--s2) var(--gut) var(--s5)}
+  .nav.open .nav-links{display:flex}
+  .nav-links a:not(.btn){padding:14px 0;border-bottom:1px solid var(--rule);font-size:17px;color:var(--ink)}
+  .nav-links .btn{margin-top:var(--s4);min-height:48px}
+}
+
+/* ===== mobile: routes turn vertical ===== */
+@media (max-width:639px){
+  :root{--gut:20px}
+  body{font-size:16.5px}
+  .hero{padding:var(--s7) 0 var(--s6)}
+  .zones{display:none}
+  .map{grid-template-columns:minmax(0,1fr)}
+  .n{grid-column:1;grid-row:var(--m);grid-template-columns:var(--pt) minmax(0,1fr);grid-template-rows:auto auto auto minmax(22px,1fr);column-gap:14px}
+  .n[data-out="none"]{grid-template-rows:auto auto auto 0}
+  .n[data-in="none"]:not(:first-child){margin-top:var(--s5);padding-top:var(--s5);border-top:1px solid var(--rule)}
+  .n--next .lb{padding-top:0}
+  .n--pass{display:none}
+  .lb{grid-column:2;grid-row:2;padding:0 0 0;align-self:start}
+  .lb b{font-size:16.5px}
+  .pt{grid-column:1;grid-row:2;align-self:start;margin-top:5px}
+  .si{display:block;grid-column:1;grid-row:1;min-height:20px;margin-bottom:-5px}
+  .n[data-in="none"] .si{display:none}
+  .so{grid-column:1;grid-row:2/5;align-self:stretch;height:auto;margin-top:17px}
+  .so::before,.si::before{left:50%;top:0;bottom:0;right:auto;border-top-width:0;border-left-width:var(--line);transform:translateX(-50%)}
+  .n[data-out="open"] .so::before{border-left-style:dashed;border-color:var(--signal)}
+  .n[data-out="trace"] .so::before{border-left-width:3px;border-color:var(--trace)}
+  .n[data-in="open"] .si::before{border-left-style:dashed;border-color:var(--signal)}
+  .n[data-in="trace"] .si::before{border-left-width:3px;border-color:var(--trace)}
+  .nt{grid-column:2;grid-row:1;height:auto;align-self:center;padding:8px 0 14px}
+  .nb{position:static;transform:none;white-space:normal;max-width:none;text-align:left;justify-content:flex-start}
+  .bl{grid-column:2;grid-row:3;padding:8px 0 14px}
+  .map--co{grid-template-columns:minmax(0,1fr) 44px}
+  .obs{grid-column:2;grid-row:1/span 4;display:block;border-left:1px solid var(--ink);margin:6px 0 4px 10px;padding:0 0 0 10px;position:relative}
+  .tp,.obs .ln{display:none}
+  .obs .ol{display:block;writing-mode:vertical-rl;padding:0;font-size:14px;white-space:nowrap}
+  .obs .ol em{margin:6px 0 0}
+  .tbl thead{display:none}
+  .tbl,.tbl tbody,.tbl tr,.tbl th,.tbl td{display:block}
+  .tbl tr{padding:var(--s4) 0;border-bottom:1px solid var(--rule)}
+  .tbl tbody tr:first-child{border-top:1px solid var(--ink)}
+  .tbl tbody th,.tbl td{border:0;padding:0 0 6px;white-space:normal}
+  .questions>div{grid-template-columns:1fr;gap:var(--s2)}
+  .questions dd{flex-direction:column;gap:6px}
+  .row2{grid-template-columns:1fr}
+  .form{padding:var(--s5) var(--s4)}
+  .form-foot .btn{width:100%}
+  .ctas .btn{flex:1 1 100%}
+  .statement{padding-left:var(--s4);margin-top:var(--s7)}
+  .route-ctl{gap:0}
+  .route-ctl button{padding:0 9px;font-size:14.5px}
+  .ctl-l{width:100%;margin:0 0 2px}
+  details p{padding-right:0}
+  .foot-in{flex-direction:column;align-items:flex-start}
+  .legend-line p{display:block}
+  .legend-line .sw{margin-right:8px}
+}
+
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a href="#top" class="logo" aria-label="FileFresh, back to top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>FileFresh</a>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="navLinks"><span class="sr">Menu</span><span class="bars" aria-hidden="true"></span></button>
+    <nav class="nav-links" id="navLinks" aria-label="Primary">
+      <a href="#problem">Problem</a>
+      <a href="#workflows">Workflows</a>
+      <a href="#approach">Approach</a>
+      <a href="#who">Who it’s for</a>
+      <a href="#faq">FAQ</a>
+      <a href="mailto:ilya@filefresh.net" class="btn btn-primary btn-sm">Talk to us</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<span id="top"></span>
+
+<section class="hero" aria-labelledby="h-hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <div class="hero-copy">
+        <h1 id="h-hero">Where did the data change?</h1>
+        <p class="support">Trace supplier data from source to destination.</p>
+        <p class="lede">FileFresh is being built for teams that depend on supplier XML, CSV, API and inventory feeds — and need to understand whether bad data originated at the source or changed somewhere during the import.</p>
+        <div class="ctas">
+          <a href="mailto:ilya@filefresh.net" class="btn btn-primary">Talk to us</a>
+          <a href="#contact" class="btn btn-line">Tell us about your workflow</a>
+        </div>
+      </div>
+      <dl class="tb tb--project"><div><dt>Product</dt><dd>FileFresh</dd></div><div><dt>Status</dt><dd class=claim>Early-stage product — currently in customer discovery</dd></div><div><dt>Looking at</dt><dd>Supplier XML, CSV, API and inventory feeds</dd></div><div><dt>Contact</dt><dd><a href="mailto:ilya@filefresh.net">ilya@filefresh.net</a></dd></div></dl>
+    </div>
+
+    <figure class="fig fig--hero" aria-labelledby="cap-hero">
+      <div class="zones" style="--tpl:minmax(0,1fr) minmax(0,1fr) minmax(0,.62fr)" aria-hidden="true"><span style="grid-column:span 1">Source</span><span style="grid-column:span 1">In transit</span><span style="grid-column:span 1">Destination</span></div>
+      <div class="map map--hero" style="--tpl:minmax(0,1fr) minmax(0,1fr) minmax(0,.62fr)" aria-hidden="true"><div class="n n--src" data-route="h" data-in="none" data-out="open" style="--r:1;--c:1;--m:1"><span class="lb"><b>Supplier</b><small>XML · CSV · API</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="bl"><span class="rd">stock 14</span></span></div>
+<div class="n n--stn" data-route="h" data-in="open" data-out="open" style="--r:1;--c:2;--m:2"><span class="lb"><b>Import / mapping</b><small>importer · mapping rules · middleware</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb"><i>?</i>changed here?</span></span></div>
+<div class="n n--dst" data-route="h" data-in="open" data-out="none" style="--r:1;--c:3;--m:3"><span class="lb"><b>Destination</b><small>Shopify · ERP · WMS · Marketplace</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb"><i>?</i>or here?</span></span><span class="bl"><span class="bl-t">Where the issue shows up</span><span class="rd rd--sig">stock 0</span></span></div></div><ol class="sr"><li>Supplier (XML · CSV · API) → Import / mapping (importer · mapping rules · middleware) → Destination (Shopify · ERP · WMS · Marketplace). Unresolved between supplier and import / mapping (changed here?); unresolved between import / mapping and destination (or here?).</li></ol>
+      <figcaption class="ffoot" id="cap-hero">
+        <ul class="key" aria-label="Map key">
+<li><span class="sw sw-src"></span>Source</li>
+<li><span class="sw sw-stn"></span>System or step</li>
+<li><span class="sw sw-dst"></span>Destination</li>
+<li><span class="sw sw-route"></span>Data path</li>
+<li><span class="sw sw-open"></span>Unresolved: value differs, origin unknown</li>
+<li><span class="sw sw-trace"></span>Traced: matches what arrived</li>
+</ul>
+        <dl class="tb "><div><dt>Drawing</dt><dd>Supplier data, source to destination</dd></div><div><dt>Type</dt><dd class=claim>Conceptual illustration — not a product screenshot</dd></div><div><dt>Values</dt><dd>Invented examples</dd></div></dl>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec sec--problem" id="problem" aria-labelledby="h-problem">
+  <div class="wrap">
+    <div class="split">
+      <h2 id="h-problem">The sync succeeded.<br><span class="h-2">The data still looks wrong.</span></h2>
+      <div class="split-r">
+        <p class="intro">A successful sync only tells you that a process completed. It does not necessarily tell you:</p>
+        <ul class="qlist">
+          <li>Whether the supplier sent complete data</li>
+          <li>Whether the source structure changed</li>
+          <li>Whether mapping behaved differently</li>
+          <li>Whether a field disappeared during transformation</li>
+          <li>Where an incorrect downstream value first appeared</li>
+        </ul>
+      </div>
+    </div>
+
+    <figure class="fig fig--prob" aria-label="Every step reports completed; the transitions between steps remain unresolved.">
+      <div class="map map--prob" style="--tpl:minmax(0,1fr) minmax(0,1fr) minmax(0,.62fr)" aria-hidden="true"><div class="n n--src" data-route="p" data-in="none" data-out="open" style="--r:1;--c:1;--m:1"><span class="lb"><b>Source</b><small>upstream</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="bl"><span class="done">✓ completed</span><p>The supplier sends changed, missing or unexpected data.</p></span></div>
+<div class="n n--stn" data-route="p" data-in="open" data-out="open" style="--r:1;--c:2;--m:2"><span class="lb"><b>Import</b><small>in transit</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb nb--q"><i>?</i></span></span><span class="bl"><span class="done">✓ completed</span><p>Mapping, transformation or import logic changes the result.</p></span></div>
+<div class="n n--dst" data-route="p" data-in="open" data-out="none" style="--r:1;--c:3;--m:3"><span class="lb"><b>Destination</b><small>downstream</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb nb--q"><i>?</i></span></span><span class="bl"><span class="done">✓ completed</span><p>The issue becomes visible later in a store, ERP, WMS or fulfillment workflow.</p></span></div></div><ol class="sr"><li>Source (upstream) → Import (in transit) → Destination (downstream). Unresolved between source and import; unresolved between import and destination.</li></ol>
+      <div class="legend-line">
+        <p><span class="done">✓ completed</span> is what each step reports about itself.</p>
+        <p><span class="sw sw-trace"></span>Traced against the source: <strong>nothing on this path.</strong></p>
+      </div>
+    </figure>
+
+    <p class="statement">Seeing that something is wrong is one problem.<br><strong>Understanding where it became wrong is another.</strong></p>
+  </div>
+</section>
+
+<section class="sec sec--wf" id="workflows" aria-labelledby="h-wf">
+  <div class="wrap">
+    <div class="wf-head">
+      <h2 id="h-wf">Supplier data rarely follows a simple path.</h2>
+      <p class="intro">Modern commerce teams often depend on several independent tools and suppliers — each with its own logs, formats and definition of “done”.</p>
+    </div>
+
+    <figure class="fig fig--wf" aria-labelledby="cap-wf">
+      <div class="route-ctl" role="group" aria-label="Highlight a supplier path">
+        <span class="ctl-l" aria-hidden="true">Highlight</span>
+        <button type="button" data-focus="" aria-pressed="true">All paths</button>
+        <button type="button" data-focus="a" aria-pressed="false">Supplier A</button>
+        <button type="button" data-focus="b" aria-pressed="false">Supplier B</button>
+        <button type="button" data-focus="c" aria-pressed="false">Supplier C</button>
+      </div>
+      <div class="zones" style="--tpl:repeat(4,minmax(0,1fr)) minmax(0,.8fr)" aria-hidden="true"><span style="grid-column:span 1">Supplier</span><span style="grid-column:span 1">Format</span><span style="grid-column:span 1">Transform</span><span style="grid-column:span 1">System</span><span style="grid-column:span 1">Destination</span></div>
+      <div class="map map--wf" style="--tpl:repeat(4,minmax(0,1fr)) minmax(0,.8fr)" aria-hidden="true"><div class="n n--src" data-route="a" data-in="none" data-out="plain" style="--r:1;--c:1;--m:1"><span class="lb"><b>Supplier A</b><small>source</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn" data-route="a" data-in="plain" data-out="plain" style="--r:1;--c:2;--m:2"><span class="lb"><b>XML</b><small>feed</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn" data-route="a" data-in="plain" data-out="open" style="--r:1;--c:3;--m:3"><span class="lb"><b>Shopify importer</b><small>importer</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--pass" data-route="a" data-in="open" data-out="open" style="--r:1;--c:4;--m:3"><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--dst" data-route="a" data-in="open" data-out="none" style="--r:1;--c:5;--m:4"><span class="lb"><b>Store</b><small>destination</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:1"><span class="nb"><i>?</i>stock 14 → 0</span></span></div>
+<div class="n n--src n--next" data-route="b" data-in="none" data-out="plain" style="--r:2;--c:1;--m:5"><span class="lb"><b>Supplier B</b><small>source</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn n--next" data-route="b" data-in="plain" data-out="plain" style="--r:2;--c:2;--m:6"><span class="lb"><b>CSV</b><small>feed</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn n--next" data-route="b" data-in="plain" data-out="open" style="--r:2;--c:3;--m:7"><span class="lb"><b>Middleware</b><small>transform</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn n--next" data-route="b" data-in="open" data-out="plain" style="--r:2;--c:4;--m:8"><span class="lb"><b>ERP</b><small>system</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb"><i>?</i>variants 4 → 3</span></span></div>
+<div class="n n--dst n--next" data-route="b" data-in="plain" data-out="none" style="--r:2;--c:5;--m:9"><span class="lb"><b>Shopify</b><small>destination</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--src n--next" data-route="c" data-in="none" data-out="plain" style="--r:3;--c:1;--m:10"><span class="lb"><b>Supplier C</b><small>source</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn n--next" data-route="c" data-in="plain" data-out="open" style="--r:3;--c:2;--m:11"><span class="lb"><b>API</b><small>feed</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--pass n--next" data-route="c" data-in="open" data-out="open" style="--r:3;--c:3;--m:11"><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn n--next" data-route="c" data-in="open" data-out="plain" style="--r:3;--c:4;--m:12"><span class="lb"><b>WMS</b><small>system</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:1"><span class="nb"><i>?</i>&lt;item&gt; → &lt;product&gt;</span></span></div>
+<div class="n n--dst n--next" data-route="c" data-in="plain" data-out="none" style="--r:3;--c:5;--m:13"><span class="lb"><b>Marketplace</b><small>destination</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div></div><ol class="sr"><li>Supplier A (source) → XML (feed) → Shopify importer (importer) → Store (destination). Unresolved between shopify importer and store (stock 14 → 0).</li><li>Supplier B (source) → CSV (feed) → Middleware (transform) → ERP (system) → Shopify (destination). Unresolved between middleware and erp (variants 4 → 3).</li><li>Supplier C (source) → API (feed) → WMS (system) → Marketplace (destination). Unresolved between api and wms (&lt;item&gt; → &lt;product&gt;).</li></ol>
+      <figcaption class="ffoot" id="cap-wf"><p class="fig-note">Where each unresolved segment sits is invented for illustration. In practice, finding that position is the hard part.</p><dl class="tb "><div><dt>Drawing</dt><dd>Three supplier paths</dd></div><div><dt>Type</dt><dd class=claim>Conceptual illustration — not a product screenshot</dd></div><div><dt>Values</dt><dd>Invented examples, not customer data</dd></div></dl></figcaption>
+    </figure>
+
+    <div class="notes3">
+      <p><strong>Many tools, many owners.</strong> Suppliers, importers, middleware and destinations are often run by different teams or vendors.</p>
+      <p><strong>Every step says “success”.</strong> Each system may correctly report that its own step succeeded while the final data is still unexpected.</p>
+      <p><strong>The full path is the gap.</strong> FileFresh is being explored as a way to understand the complete path without replacing every system in it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec--res" id="research" aria-labelledby="h-res">
+  <div class="wrap">
+    <div class="res-head">
+      <div>
+        <h2 id="h-res">What we keep seeing</h2>
+        <p class="intro">Patterns we’ve found while researching real supplier-data workflows. These are observations from discovery — not customer stories.</p>
+      </div>
+      <dl class="tb "><div><dt>Source</dt><dd>Our discovery research</dd></div><div><dt>Type</dt><dd class=claim>Research observations — not customer stories</dd></div><div><dt>Examples</dt><dd>Illustrative values</dd></div></dl>
+    </div>
+
+    <table class="tbl tbl--res">
+      <thead><tr><th scope="col">Pattern</th><th scope="col">Example of the difference</th><th scope="col">What we’ve seen</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Stock mismatches</th><td><span class="dv"><span>upstream 14</span><span class="dl" aria-hidden="true"></span><span class="sig">store 0</span></span></td><td>A store can show an item unavailable even when inventory exists upstream.</td></tr>
+        <tr><th scope="row">Import surprises</th><td><span class="dv"><span>4 variants</span><span class="dl" aria-hidden="true"></span><span class="sig">3 variants</span></span></td><td>Product fields or variants may not appear downstream as expected.</td></tr>
+        <tr><th scope="row">Supplier changes</th><td><span class="dv"><span>&lt;item&gt;</span><span class="dl" aria-hidden="true"></span><span class="sig">&lt;product&gt;</span></span></td><td>A new supplier or changed product structure can create unexpected integration behavior.</td></tr>
+        <tr><th scope="row">Custom feeds</th><td><span class="dv dv--plain">auth · custom mapping · edge cases</span></td><td>CSV/XML feeds may require authentication, custom mapping or special handling.</td></tr>
+        <tr><th scope="row">High-frequency data</th><td><span class="dv dv--plain">refreshed every few minutes</span></td><td>Some operations refresh supplier inventory every few minutes, making reliability increasingly important.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="statement statement--s">These situations do not necessarily mean the supplier feed is broken. <strong>The difficult part is determining where the discrepancy began.</strong></p>
+  </div>
+</section>
+
+<section class="sec sec--ap" id="approach" aria-labelledby="h-ap">
+  <div class="wrap">
+    <div class="ap-grid">
+      <div class="ap-copy">
+        <h2 id="h-ap">A clearer view between source and destination.</h2>
+        <p>FileFresh is being designed around a simple idea: capture enough context around the data pipeline to make investigation easier when something looks wrong.</p>
+        <p>Instead of immediately replacing the importer or sync system, the goal is to help answer better questions.</p>
+      </div>
+      <dl class="questions">
+        <div><dt>What arrived?</dt><dd><p>What did the supplier actually send?</p><span class="ref">at the source</span></dd></div>
+        <div><dt>What changed?</dt><dd><p>Which values or structures changed compared with what was expected or previously received?</p><span class="ref">between deliveries</span></dd></div>
+        <div><dt>Where?</dt><dd><p>Was the difference already present upstream, or did it appear later in the pipeline?</p><span class="ref">along the path</span></dd></div>
+        <div><dt>When?</dt><dd><p>When did the behavior first change?</p><span class="ref">over time</span></dd></div>
+      </dl>
+    </div>
+
+    <figure class="fig fig--ap" aria-labelledby="cap-ap">
+      <div class="zones" style="--tpl:repeat(3,minmax(0,1fr)) minmax(0,.7fr)" aria-hidden="true"><span style="grid-column:span 2">Source</span><span style="grid-column:span 1">In transit</span><span style="grid-column:span 1">Destination</span></div>
+      <div class="map map--ap" style="--tpl:repeat(3,minmax(0,1fr)) minmax(0,.7fr)" aria-hidden="true"><div class="n n--src" data-route="q" data-in="none" data-out="trace" style="--r:1;--c:1;--m:1"><span class="lb"><b>Supplier</b><small>what arrived</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="bl"><span class="rd">variants 4</span></span></div>
+<div class="n n--stn" data-route="q" data-in="trace" data-out="trace" style="--r:1;--c:2;--m:2"><span class="lb"><b>Feed</b><small>XML · CSV · API</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="bl"><span class="rd">variants 4</span></span></div>
+<div class="n n--stn" data-route="q" data-in="trace" data-out="open" style="--r:1;--c:3;--m:3"><span class="lb"><b>Import / mapping</b><small>in transit</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="bl"><span class="rd">variants 4</span></span></div>
+<div class="n n--dst" data-route="q" data-in="open" data-out="none" style="--r:1;--c:4;--m:4"><span class="lb"><b>Destination</b><small>where it shows up</small></span><span class="si"></span><span class="pt"></span><span class="so"></span><span class="nt" style="--k:0"><span class="nb"><i>?</i>variants 4 → 3</span></span><span class="bl"><span class="rd rd--sig">variants 3</span></span></div></div><ol class="sr"><li>Supplier (what arrived) → Feed (XML · CSV · API) → Import / mapping (in transit) → Destination (where it shows up). Traced from supplier to feed; traced from feed to import / mapping; unresolved between import / mapping and destination (variants 4 → 3).</li></ol>
+      <figcaption class="ffoot" id="cap-ap">
+        <p class="fig-note">Illustration of the “where?” question: the value matches what arrived until one transition, and that transition is the one worth investigating.</p>
+        <dl class="tb "><div><dt>Drawing</dt><dd>Where a difference first appears</dd></div><div><dt>Type</dt><dd class=claim>Product direction — not a list of currently released features</dd></div><div><dt>Values</dt><dd>Invented examples</dd></div></dl>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec sec--co" id="complement" aria-labelledby="h-co">
+  <div class="wrap">
+    <div class="split">
+      <h2 id="h-co">Keep your existing importer.</h2>
+      <div class="split-r">
+        <p>FileFresh is not intended to become another catalog importer. Your existing workflow may already handle synchronization very well.</p>
+        <p>The product direction is to make it easier to investigate what happened when the result does not match expectations.</p>
+      </div>
+    </div>
+
+    <figure class="fig fig--co" aria-labelledby="cap-co">
+      <div class="map map--co" style="--tpl:repeat(3,minmax(0,1fr)) minmax(0,.7fr)" aria-hidden="true"><div class="n n--src" data-route="k" data-in="none" data-out="plain" style="--r:1;--c:1;--m:1"><span class="lb"><b>Supplier</b><small>source</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn" data-route="k" data-in="plain" data-out="plain" style="--r:1;--c:2;--m:2"><span class="lb"><b>Feed</b><small>XML · CSV · API</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--stn" data-route="k" data-in="plain" data-out="plain" style="--r:1;--c:3;--m:3"><span class="lb"><b>Existing importer / middleware</b><small>unchanged</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="n n--dst" data-route="k" data-in="plain" data-out="none" style="--r:1;--c:4;--m:4"><span class="lb"><b>Destination</b><small>Shopify · ERP · WMS</small></span><span class="si"></span><span class="pt"></span><span class="so"></span></div>
+<div class="obs"><span class="tp" style="--c:1"></span><span class="tp" style="--c:2"></span><span class="tp" style="--c:3"></span><span class="tp" style="--c:4"></span><span class="ln"></span><span class="ol"><b>FileFresh</b> — visibility / investigation layer <em>exploring</em></span></div></div><ol class="sr"><li>Supplier (source) → Feed (XML · CSV · API) → Existing importer / middleware (unchanged) → Destination (Shopify · ERP · WMS).</li></ol>
+      <figcaption class="ffoot" id="cap-co">
+        <p class="fig-note">Your tools keep doing the sync. FileFresh aims to add context.</p>
+        <dl class="tb "><div><dt>Drawing</dt><dd>Alongside an existing workflow</dd></div><div><dt>Type</dt><dd class=claim>Product direction — not a released integration</dd></div></dl>
+      </figcaption>
+    </figure>
+
+    <div class="formats"><p>Formats and systems in the workflows we’re researching</p><ul><li>XML</li><li>CSV</li><li>API</li><li>FTP</li><li>SFTP</li><li>ERP</li><li>WMS</li><li>Shopify</li><li>Marketplace</li></ul></div>
+  </div>
+</section>
+
+<section class="sec sec--who" id="who" aria-labelledby="h-who">
+  <div class="wrap who-grid">
+    <div>
+      <h2 id="h-who">Teams that depend on someone else’s data.</h2>
+      <p class="intro">We’re currently speaking with teams where external product and inventory data directly affects what gets sold, shipped and shown.</p>
+    </div>
+    <table class="tbl tbl--who">
+      <thead><tr><th scope="col">Team</th><th scope="col">Where they meet supplier data</th><th scope="col">On the map</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Ecommerce</th><td>Stores importing supplier catalogs, variants, pricing and inventory.</td><td class="m">destination</td></tr>
+        <tr><th scope="row">Operations</th><td>Teams whose fulfillment and availability depend on external product data.</td><td class="m">downstream</td></tr>
+        <tr><th scope="row">Marketplaces</th><td>Businesses combining product information from many suppliers or sellers.</td><td class="m">many sources</td></tr>
+        <tr><th scope="row">Integration teams</th><td>Teams moving catalog and inventory data between ecommerce, ERP, OMS and WMS systems.</td><td class="m">in transit</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="sec sec--contact" id="contact" aria-labelledby="h-contact">
+  <div class="wrap contact-grid">
+    <div class="contact-copy">
+      <h2 id="h-contact">When something looks wrong, how do you find the source?</h2>
+      <p>We’re currently speaking with ecommerce and operations teams that rely on external product or inventory data.</p>
+      <p>We want to understand how teams investigate supplier-data problems today before deciding exactly what FileFresh should become.</p>
+      <p class="no-deck"><strong>No sales deck required.</strong> We’re interested in understanding the workflow first.</p>
+      <p class="direct">Or write directly: <a href="mailto:ilya@filefresh.net">ilya@filefresh.net</a></p>
+    </div>
+
+    <form class="form" id="wf" action="mailto:ilya@filefresh.net" method="post" enctype="text/plain" aria-labelledby="formTitle" novalidate>
+      <div class="form-head"><h3 id="formTitle">Tell us about your workflow</h3><span>about 2 minutes</span></div>
+      <div class="row2">
+        <label class="f"><span class="ft">Name</span><input class="inp" name="name" autocomplete="name" required></label>
+        <label class="f"><span class="ft">Work email</span><input class="inp" type="email" name="email" autocomplete="email" required></label>
+      </div>
+      <div class="row2">
+        <label class="f"><span class="ft">Company <span class="opt">optional</span></span><input class="inp" name="company" autocomplete="organization"></label>
+        <label class="f"><span class="ft">Role <span class="opt">optional</span></span><input class="inp" name="role" autocomplete="organization-title"></label>
+      </div>
+      <fieldset>
+        <legend>What type of supplier data do you work with?</legend>
+        <div class="opts">
+          <label><input type="checkbox" name="data" value="XML"> XML</label>
+          <label><input type="checkbox" name="data" value="CSV"> CSV</label>
+          <label><input type="checkbox" name="data" value="API"> API</label>
+          <label><input type="checkbox" name="data" value="FTP/SFTP"> FTP/SFTP</label>
+          <label><input type="checkbox" name="data" value="Spreadsheet"> Spreadsheet</label>
+          <label><input type="checkbox" name="data" value="Other"> Other</label>
+        </div>
+      </fieldset>
+      <label class="f"><span class="ft">When product or inventory data looks wrong, how do you currently find out where the problem started? <span class="opt">optional</span></span>
+        <textarea class="inp" name="how" rows="4"></textarea>
+      </label>
+      <div class="form-foot">
+        <p>Opens an email to ilya@filefresh.net with your answers. Nothing is stored on this site.</p>
+        <button type="submit" class="btn btn-primary">Open email</button>
+      </div>
+      <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</section>
+
+<section class="sec sec--faq" id="faq" aria-labelledby="h-faq">
+  <div class="wrap faq-grid">
+    <div class="faq-side">
+      <h2 id="h-faq">FAQ</h2>
+      <p>FileFresh is early. If your question isn’t here, <a href="mailto:ilya@filefresh.net">ask us directly</a>.</p>
+    </div>
+    <div class="acc">
+      <details open><summary>What is FileFresh?</summary><p>FileFresh is an early-stage product being explored around visibility and traceability in supplier-data workflows.</p></details>
+      <details><summary>Is FileFresh another feed importer?</summary><p>No. The current direction is to work alongside existing import and synchronization systems rather than replace them.</p></details>
+      <details><summary>What types of data are you looking at?</summary><p>We’re currently researching workflows involving XML, CSV, APIs, FTP/SFTP, inventory feeds and similar supplier-data sources.</p></details>
+      <details><summary>Does FileFresh automatically fix bad feeds?</summary><p>No. The current focus is understanding the visibility and investigation problem first.</p></details>
+      <details><summary>Is FileFresh available today?</summary><p>We’re currently in customer discovery and early product development. If supplier data is operationally important to your business, we’d like to talk.</p></details>
+      <details><summary>Do I need to replace my existing integration?</summary><p>That is not the current product direction. FileFresh is being explored as a complementary layer around existing workflows.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="final" aria-labelledby="h-final">
+  <div class="wrap final-in">
+    <p class="pre">We’re building FileFresh around a simple question:</p>
+    <h2 id="h-final">What did the supplier send — and where did the result begin to differ?</h2>
+    <div class="final-act">
+      <a href="mailto:ilya@filefresh.net" class="btn btn-primary">Talk to us</a>
+      <p>Tell us how supplier data reaches your business today.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a href="#top" class="logo"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>FileFresh</a>
+    <p>Early-stage product — currently in customer discovery</p>
+    <p class="foot-links"><a href="https://filefresh.net/">filefresh.net</a><a href="mailto:ilya@filefresh.net">ilya@filefresh.net</a></p>
+    <p>© 2026 FileFresh</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const nav = document.getElementById('nav'), btn = document.getElementById('menuBtn');
+  const setOpen = o => { nav.classList.toggle('open', o); btn.setAttribute('aria-expanded', String(o)); };
+  btn.addEventListener('click', () => setOpen(!nav.classList.contains('open')));
+  document.querySelectorAll('#navLinks a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && nav.classList.contains('open')) { setOpen(false); btn.focus(); } });
+
+  const ctl = document.querySelector('.route-ctl'), wf = document.querySelector('.map--wf');
+  if (ctl && wf) ctl.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    ctl.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (b.dataset.focus) wf.dataset.focus = b.dataset.focus; else delete wf.dataset.focus;
+  });
+
+  const f = document.getElementById('wf'), msg = document.getElementById('formMsg');
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    const d = new FormData(f), name = (d.get('name') || '').trim(), email = (d.get('email') || '').trim();
+    msg.classList.remove('err');
+    if (!name || !email || !f.elements.email.checkValidity()) {
+      msg.textContent = 'Please add your name and a valid work email.'; msg.classList.add('err');
+      (!name ? f.elements.name : f.elements.email).focus(); return;
+    }
+    const v = k => (d.get(k) || '').trim() || '—';
+    const body = ['Name: ' + name, 'Work email: ' + email, 'Company: ' + v('company'), 'Role: ' + v('role'),
+      'Supplier data: ' + (d.getAll('data').join(', ') || '—'), '', 'How we currently find where problems start:', v('how')].join('\n');
+    const subj = 'FileFresh — workflow conversation (' + ((d.get('company') || '').trim() || name) + ')';
+    location.href = 'mailto:ilya@filefresh.net?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+    msg.textContent = 'Your email app should open with your answers. If it doesn’t, write to ilya@filefresh.net.';
+  });
+})();
+
+</script>
+</body>
+</html>
